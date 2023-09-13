@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>人流量预测</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.2.1/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.5.7/css/mdb.min.css" />
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #333;
+        }
+
+        .chart-container {
+            width: 80%;
+            max-width: 800px;
+            height: 400px;
+        }
+
+        .prediction-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        /* ... 其他样式 ... */
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 style="color: white;">人流量预测</h1>
+        <!-- 模拟数据按钮 -->
+        <button id="generateData" class="btn btn-primary">生成模拟数据</button>
+        <br>
+        <!-- ECharts 折线图容器 -->
+        <div class="chart-container" id="lineChart"></div>
+        <!-- 预测功能区 -->
+        <div class="prediction-container">
+            <label style="color: white;" for="endDate">预测天数:</label>
+            <input id="futureDays" type="number" class="form-control" placeholder="输入未来天数" aria-label="future days"
+                aria-describedby="basic-addon2" value="10">
+            <button id="predict" class="btn btn-success">预测</button>
+        </div>
+        <!-- 下载按钮 -->
+        <button id="download" class="btn btn-primary">下载结果</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.5.7/js/mdb.min.js"></script>
+    <script>
+        // ECharts 折线图配置
+        const chartOptions = {
+            title: {
+                text: '人流量变化',
+            },
+            xAxis: {
+                type: 'category',
+                data: [], // 日期数据
+            },
+            yAxis: {
+                type: 'value',
+            },
+            series: [{
+                type: 'line',
+                data: [], // 人流量数据
+            }],
+            tooltip: {
+                trigger: 'axis', // 触发类型，可以设置为 'item' 或 'axis'
+                axisPointer: {
+                    type: 'cross' // axisPointer类型，可以根据需要设置为 'line'、'shadow' 等
+                },
+                formatter: function (params) {
+                    // 自定义tooltip内容
+                    return `日期：${params[0].name}<br/>人数：${params[0].value}`;
+                }
+            },
+        };
+
+        const lineChart = echarts.init(document.getElementById('lineChart'));
+
+        // 更新折线图
+        function updateChart(data) {
+            const dates = data.Date;
+            const values = data.Value;
+            chartOptions.xAxis.data = dates;
+            chartOptions.series[0].data = values;
+            lineChart.setOption(chartOptions);
+        }
+
+        // 生成模拟数据
+        $('#generateData').click(function () {
+            // 使用模拟数据填充折线图
+            // 发送请求给后端，并更新折线图
+            $.ajax({
+                url: '/generateData',
+                method: 'GET',
+                success: function (response) {
+                    // console.log(response);
+                    updateChart(response);
+                },
+                error: function (error) {
+                    alert('生成模拟数据失败:', error);
+                }
+            });
+        });
+
+        // 预测按钮点击事件
+        $('#predict').click(function () {
+
+            // 获取预测天数
+            const futureDays = $('#futureDays').val();
+            // 整理原始数据
+            const dates = chartOptions.xAxis.data;
+            const values = chartOptions.series[0].data;
+
+            const sendData = {
+                future_steps: futureDays,
+                Date: dates,
+                Value: values,
+            };
+
+            // 发送预测请求给后端，并更新折线图
+            $.ajax({
+                url: '/predict',
+                method: 'POST',
+                dataType: "json",
+                contentType: 'application/json',
+                data: JSON.stringify(sendData),
+                success: function (response) {
+                    // console.log(response);
+                    updateChart(response);
+                },
+                error: function (error) {
+                    alert('预测失败:', error);
+                }
+            });
+        });
+
+        // 生成csv格式
+        function convertToCSV() {
+            const dates = chartOptions.xAxis.data;
+            const values = chartOptions.series[0].data;
+
+            const data = [];
+            data.push(['Date', 'Value']); // 列标题
+            for (let i = 0; i < dates.length; i++) {
+                data.push([dates[i], values[i]]);
+            }
+            return data.map(row => row.join(',')).join('\n');
+        }
+
+
+        // 创建一个Blob对象以存储CSV数据
+        function createCSVFile() {
+            const csvData = convertToCSV();
+            const blob = new Blob([csvData], {
+                type: 'text/csv'
+            });
+            return blob;
+        }
+
+        function downloadCSV() {
+            const csvBlob = createCSVFile();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(csvBlob);
+            a.download = 'predicted_data.csv';
+
+            // 触发点击事件
+            a.click();
+
+            // 清理下载链接
+            URL.revokeObjectURL(a.href);
+        }
+
+        // 下载按钮点击事件
+        $('#download').click(function () {
+            downloadCSV();
+        });
+    </script>
+</body>
+
+</html>

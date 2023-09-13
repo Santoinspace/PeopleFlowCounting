@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>demo</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://unpkg.com/canvas-select@^2/lib/canvas-select.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.5.7/css/mdb.min.css" />
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #333;
+        }
+
+        h1 {
+            color: white;
+            font-size: 120px;
+            font-weight: 400;
+            text-align: center;
+            user-select: none;
+        }
+
+        #videoElement {
+            max-width: 100%;
+            max-height: 40vh;
+        }
+
+        #canvas {
+            max-width: 100%;
+            max-height: 40vh;
+        }
+
+        .c-panel {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .s-panel {
+            margin: auto;
+            width: 500px;
+            height: 100px;
+            border: gray dashed 3px;
+            text-align: center;
+        }
+
+        .editContainer {
+            background-color: #ccc;
+            width: 100%;
+            height: 60vh;
+            /* 调整编辑区域的高度 */
+        }
+
+        /* 编辑区域的控制面板样式 */
+        .edit-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
+
+        /* 左侧功能选择区样式 */
+        .edit-mode-selection,
+        .draw-mode-selection {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* 右侧功能区按钮样式 */
+        .edit-buttons button {
+            margin-left: 10px;
+        }
+
+        /* ... 其他样式 ... */
+    </style>
+</head>
+
+<body>
+    <script>
+        let videoElement;
+        let file;
+        let canvas;
+        let context;
+        let selectedFrameData = null;
+
+        $(document).ready(function () {
+            $("#filebtn").click(function () {
+                $("#fileipt").click();
+            });
+
+            $('#resbtn').click(getResult);
+
+            canvas = $('#canvas')[0];
+            context = canvas.getContext('2d');
+
+            $("#snapshotButton").click(snapshot);
+
+            $("#videoElement").on('loadedmetadata ', function () {
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+                initVideo(videoElement);
+            });
+
+            $("#videoElement").on('play', snapshot);
+
+            $("#editButton").click(editState);
+        });
+
+        function previewState() {
+            $('#main').hide();
+            $('#preview').show();
+            $('#edit').hide();
+            videoElement.pause();
+        }
+
+        function editState() {
+            $('#main').hide();
+            $('#preview').hide();
+            $('#edit').show();
+            $('#inform').hide();
+            videoElement.pause();
+            initInstance();
+        }
+
+        function snapshot() {
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            selectedFrameData = canvas.toDataURL('image/png');
+            // console.log(selectedFrameData);
+            initImage(selectedFrameData);
+        }
+
+        function showVideo(input) {
+            videoElement = document.getElementById('videoElement');
+            file = input.files[0];
+
+            if (file) {
+                previewState();
+                let src = URL.createObjectURL(file);
+                // 保留原名称
+                videoElement.setAttribute('data-name', file.name);
+                videoElement.src = src;
+                // 上传视频文件到服务器
+                file = input.files[0];
+                var formData = new FormData();
+                formData.append('file', file);
+                $.ajax({
+                    url: '/upload', // 后端路由
+                    type: 'POST',
+                    data: formData, // 传递文件数据
+                    contentType: false, // 不设置内容类型
+                    cache: false, // 不缓存数据
+                    processData: false, // 不处理数据
+                    success: function (data) {
+                        // 处理成功响应
+                        console.log(data);
+                    },
+                    error: function (error) {
+                        // 处理错误响应
+                        console.log(error);
+                    }
+                });
+            }
+        }
+
+        function getResult() {
+            let id = $('#request').val();
+            $.ajax({
+                type: 'GET',
+                url: '/result',
+                data: {
+                    request_id: id
+                },
+                xhrFields: {
+                    responseType: 'blob' // 设置响应类型为 blob
+                },
+                success: function (data) {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        // 创建一个隐藏的链接并点击它来下载文件
+                        alert('开始下载。');
+                        var a = document.createElement('a');
+                        a.href = window.URL.createObjectURL(data);
+                        a.download = id + '.mp4';
+                        a.style.display = 'none';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }
+                },
+                error: function () {
+                    alert('下载请求失败。');
+                }
+            });
+        }
+    </script>
+
+    <div class="container">
+        <div id="main">
+            <h1>Crowd Counting</h1>
+            <div class="panel-group c-panel">
+                <button id="filebtn" class="btn btn-primary btn-light-green">选择视频</button>
+                <div class="s-panel input-group mb-3">
+                    <!-- 输入id查询报告 -->
+                    <input id="request" style="text-align: center;" id="result" type="text" class="form-control"
+                        placeholder="输入请求编号..." aria-label="request id" aria-describedby="basic-addon2">
+                    <div class="input-group-append">
+                        <button id="resbtn" class="btn btn-light-blue">获取报告</button>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-outline-yellow"  onclick='window.open("/analysis")'>预测（模拟）</button>
+            </div>
+        </div>
+        <div style="text-align: center;display: none;" id="preview">
+            <video id="videoElement" controls autoplay loop></video>
+            <br>
+            <button id="snapshotButton" class="btn btn-blue-grey">截取标注参考</button>
+            <button id="editButton" class="btn btn-success">编辑标注范围</button>
+            <br>
+            <canvas id="canvas"></canvas>
+        </div>
+        <div style="text-align: center; display: none;" id="edit">
+            <canvas class="editContainer"></canvas>
+            <div>
+                <button onclick="zoom(true)">+</button>
+                <button onclick="zoom(false)">-</button>
+                <button onclick="fitting()">fitting</button>
+                <button onclick="onFocus()">focusMode</button>
+            </div>
+            <div class="edit-controls">
+                <!-- 左侧功能选择区 -->
+                <div class="edit-mode-selection">
+                    <label><input type="radio" name="direction" value="down" checked
+                            onchange="areaChange(1)">下行区域</label>
+                    <label><input type="radio" name="direction" value="up" onchange="areaChange(0)">上行区域</label>
+                    <label><input type="radio" name="direction" value="up" onchange="areaChange(2)">等待区域</label>
+                </div>
+                <!-- 下一行的绘制模式选择 -->
+                <div class="draw-mode-selection">
+                    <label><input type="radio" name="drawMode" value="rectangle" checked
+                            onchange="shapeModeChange(1)">矩形模式</label>
+                    <label><input type="radio" name="drawMode" value="polygon"
+                            onchange="shapeModeChange(2)">多边形模式</label>
+                </div>
+                <!-- 右侧功能区按钮 -->
+                <div class="edit-buttons">
+                    <button class="btn btn-info" onclick="createShape()">新建</button>
+                    <button class="btn btn-warning" onclick="deleteShape()">删除</button>
+                </div>
+                <div class="edit-buttons">
+                    <button class="btn btn-info" onclick="upload()">上传</button>
+                </div>
+            </div>
+            <h3 id="inform" style="color: white;display: none;">请持请求编号回到主页面查询结果：</h3>
+            <script src="{{ url_for('static', filename='edit.js') }}"></script>
+        </div>
+    </div>
+
+
+    <input id="fileipt" type="file" accept="video/*" onchange="showVideo(this)" style="display: none;">
+
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.5.7/js/mdb.min.js"></script>
+</body>
+
+</html>
